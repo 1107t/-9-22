@@ -14,6 +14,9 @@ const WeatherApp = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
+  const [apiMode, setApiMode] = useState('demo');
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [newEvent, setNewEvent] = useState({ 
     time: '', 
     title: '', 
@@ -69,12 +72,16 @@ const WeatherApp = () => {
       ...SAMPLE_WEATHER_DATA, 
       name: 'Tokyo', 
       country: 'Japan',
+      region: '関東',
+      aliases: ['東京', 'とうきょう', 'tokyo'],
       main: { ...SAMPLE_WEATHER_DATA.main, temp: 22 }
     },
     'osaka': { 
       ...SAMPLE_WEATHER_DATA, 
       name: 'Osaka', 
       country: 'Japan',
+      region: '関西',
+      aliases: ['大阪', 'おおさか', 'osaka'],
       main: { ...SAMPLE_WEATHER_DATA.main, temp: 25 },
       weather: [{ main: "Clouds", description: "曇り", icon: "02d" }]
     },
@@ -82,22 +89,28 @@ const WeatherApp = () => {
       ...SAMPLE_WEATHER_DATA, 
       name: 'Kyoto', 
       country: 'Japan',
+      region: '関西',
+      aliases: ['京都', 'きょうと', 'kyoto'],
       main: { ...SAMPLE_WEATHER_DATA.main, temp: 21 },
       weather: [{ main: "Rain", description: "小雨", icon: "10d" }]
     },
-    'new york': { 
-      ...SAMPLE_WEATHER_DATA, 
-      name: 'New York', 
-      country: 'USA',
-      main: { ...SAMPLE_WEATHER_DATA.main, temp: 18 },
-      weather: [{ main: "Clouds", description: "曇り", icon: "04d" }]
+    'sapporo': {
+      ...SAMPLE_WEATHER_DATA,
+      name: 'Sapporo',
+      country: 'Japan',
+      region: '北海道',
+      aliases: ['札幌', 'さっぽろ', 'sapporo'],
+      main: { ...SAMPLE_WEATHER_DATA.main, temp: 8 },
+      weather: [{ main: "Snow", description: "雪", icon: "13d" }]
     },
-    'london': { 
-      ...SAMPLE_WEATHER_DATA, 
-      name: 'London', 
-      country: 'UK',
-      main: { ...SAMPLE_WEATHER_DATA.main, temp: 15 },
-      weather: [{ main: "Rain", description: "雨", icon: "09d" }]
+    'fukuoka': {
+      ...SAMPLE_WEATHER_DATA,
+      name: 'Fukuoka',
+      country: 'Japan',
+      region: '九州',
+      aliases: ['福岡', 'ふくおか', 'fukuoka'],
+      main: { ...SAMPLE_WEATHER_DATA.main, temp: 22 },
+      weather: [{ main: "Clear", description: "晴れ", icon: "01d" }]
     }
   };
 
@@ -113,17 +126,6 @@ const WeatherApp = () => {
   const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
   // Utility functions
-  const getWeatherIcon = (iconCode) => {
-    const icons = {
-      '01d': '☀️', '01n': '🌙', '02d': '⛅', '02n': '☁️',
-      '03d': '☁️', '03n': '☁️', '04d': '☁️', '04n': '☁️',
-      '09d': '🌧️', '09n': '🌧️', '10d': '🌦️', '10n': '🌧️',
-      '11d': '⛈️', '11n': '⛈️', '13d': '❄️', '13n': '❄️',
-      '50d': '🌫️', '50n': '🌫️'
-    };
-    return icons[iconCode] || '🌤️';
-  };
-
   const formatDate = (date) => {
     return date.toLocaleDateString('ja-JP', {
       year: 'numeric',
@@ -162,17 +164,183 @@ const WeatherApp = () => {
     };
   };
 
+  const getWeatherIcon = (iconCode) => {
+    const icons = {
+      '01d': '☀️', '01n': '🌙', '02d': '⛅', '02n': '☁️',
+      '03d': '☁️', '03n': '☁️', '04d': '☁️', '04n': '☁️',
+      '09d': '🌧️', '09n': '🌧️', '10d': '🌦️', '10n': '🌧️',
+      '11d': '⛈️', '11n': '⛈️', '13d': '❄️', '13n': '❄️',
+      '50d': '🌫️', '50n': '🌫️'
+    };
+    return icons[iconCode] || '🌤️';
+  };
+
+  const calculateLevenshteinDistance = (a, b) => {
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= a.length; j++) {
+      matrix[0][j] = j;
+    }
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    return matrix[b.length][a.length];
+  };
+
+  const calculateSimilarity = (input, target) => {
+    const distance = calculateLevenshteinDistance(input.toLowerCase(), target.toLowerCase());
+    const maxLength = Math.max(input.length, target.length);
+    return maxLength === 0 ? 1 : 1 - (distance / maxLength);
+  };
+
+  const fuzzySearch = (query, threshold = 0.3) => {
+    if (!query.trim()) return [];
+    
+    const queryLower = query.toLowerCase();
+    const results = [];
+
+    Object.entries(CITIES_DATA).forEach(([key, city]) => {
+      let bestScore = 0;
+      let matchType = '';
+
+      if (city.name.toLowerCase() === queryLower) {
+        bestScore = 1;
+        matchType = 'exact';
+      } else if (city.aliases.some(alias => alias.toLowerCase() === queryLower)) {
+        bestScore = 1;
+        matchType = 'exact_alias';
+      } else if (city.name.toLowerCase().includes(queryLower)) {
+        bestScore = 0.9;
+        matchType = 'partial';
+      } else if (city.aliases.some(alias => alias.toLowerCase().includes(queryLower))) {
+        bestScore = 0.9;
+        matchType = 'partial_alias';
+      } else {
+        const nameSimilarity = calculateSimilarity(queryLower, city.name);
+        const aliasSimilarities = city.aliases.map(alias => 
+          calculateSimilarity(queryLower, alias)
+        );
+        const maxAliasSimilarity = Math.max(...aliasSimilarities);
+        
+        bestScore = Math.max(nameSimilarity, maxAliasSimilarity);
+        matchType = nameSimilarity >= maxAliasSimilarity ? 'fuzzy_name' : 'fuzzy_alias';
+      }
+
+      if (bestScore >= threshold) {
+        results.push({
+          ...city,
+          score: bestScore,
+          matchType: matchType
+        });
+      }
+    });
+
+    return results.sort((a, b) => b.score - a.score).slice(0, 8);
+  };
+
+  const getMatchTypeDescription = (matchType) => {
+    switch (matchType) {
+      case 'exact':
+      case 'exact_alias':
+        return '完全一致';
+      case 'partial':
+      case 'partial_alias':
+        return '部分一致';
+      case 'fuzzy_name':
+      case 'fuzzy_alias':
+        return 'あいまい検索';
+      default:
+        return '';
+    }
+  };
+
+  // API related functions
+  const fetchWeatherFromAPI = async (cityName, lat = null, lon = null) => {
+    if (!apiKey.trim()) {
+      throw new Error('APIキーが設定されていません');
+    }
+
+    const baseUrl = 'https://api.openweathermap.org/data/2.5';
+    let weatherUrl, forecastUrl;
+
+    if (lat && lon) {
+      weatherUrl = `${baseUrl}/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=ja`;
+      forecastUrl = `${baseUrl}/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=ja`;
+    } else {
+      weatherUrl = `${baseUrl}/weather?q=${encodeURIComponent(cityName)}&appid=${apiKey}&units=metric&lang=ja`;
+      forecastUrl = `${baseUrl}/forecast?q=${encodeURIComponent(cityName)}&appid=${apiKey}&units=metric&lang=ja`;
+    }
+
+    try {
+      const [weatherResponse, forecastResponse] = await Promise.all([
+        fetch(weatherUrl),
+        fetch(forecastUrl)
+      ]);
+
+      if (!weatherResponse.ok) {
+        if (weatherResponse.status === 401) {
+          throw new Error('APIキーが無効です');
+        } else if (weatherResponse.status === 404) {
+          throw new Error('都市が見つかりませんでした');
+        } else {
+          throw new Error(`API エラー: ${weatherResponse.status}`);
+        }
+      }
+
+      const weatherData = await weatherResponse.json();
+      const forecastData = await forecastResponse.json();
+
+      return {
+        weather: weatherData,
+        forecast: {
+          list: forecastData.list.slice(0, 8)
+        }
+      };
+    } catch (error) {
+      console.error('API呼び出しエラー:', error);
+      throw error;
+    }
+  };
+
+  const toggleApiMode = () => {
+    if (apiMode === 'demo') {
+      setShowApiKeyInput(true);
+    } else {
+      setApiMode('demo');
+      setShowApiKeyInput(false);
+      setApiKey('');
+    }
+  };
+
+  const handleApiKeySubmit = () => {
+    if (apiKey.trim()) {
+      setApiMode('live');
+      setShowApiKeyInput(false);
+      setError('');
+    } else {
+      setError('有効なAPIキーを入力してください');
+    }
+  };
+
   // Event handlers
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchCity(value);
     
     if (value.trim().length > 0) {
-      const suggestions = Object.keys(CITIES_DATA)
-        .filter(city => city.includes(value.toLowerCase()))
-        .slice(0, 5)
-        .map(key => CITIES_DATA[key]);
-      
+      const suggestions = fuzzySearch(value);
       setSearchSuggestions(suggestions);
       setShowSuggestions(true);
     } else {
@@ -215,30 +383,62 @@ const WeatherApp = () => {
     }));
   };
 
+  const addEvent = () => {
+    if (!selectedDate || !newEvent.time || !newEvent.title) return;
+    
+    const dateKey = formatDateKey(selectedDate);
+    const updatedEvents = { ...events };
+    if (!updatedEvents[dateKey]) {
+      updatedEvents[dateKey] = [];
+    }
+    updatedEvents[dateKey].push({ ...newEvent });
+    setEvents(updatedEvents);
+    
+    setNewEvent({ time: '', title: '', type: 'personal' });
+  };
+
   // Main functions
-  const searchWeatherByName = (cityName) => {
+  const findCityByName = (cityName) => {
+    const results = fuzzySearch(cityName, 0.3);
+    return results.length > 0 ? results[0] : null;
+  };
+
+  const searchWeatherByName = async (cityName) => {
     setLoading(true);
     setError('');
     
-    setTimeout(() => {
-      const cityKey = cityName.toLowerCase();
-      const cityData = CITIES_DATA[cityKey];
-      
-      if (cityData) {
-        setWeatherData(cityData);
-        setForecastData(FORECAST_DATA);
+    try {
+      if (apiMode === 'live' && apiKey) {
+        const apiData = await fetchWeatherFromAPI(cityName);
+        setWeatherData(apiData.weather);
+        setForecastData(apiData.forecast);
         
-        const newHistory = searchHistory.filter(item => item !== cityName);
-        setSearchHistory([cityName, ...newHistory].slice(0, 5));
-        setError('');
+        const newHistory = searchHistory.filter(item => item !== apiData.weather.name);
+        setSearchHistory([apiData.weather.name, ...newHistory].slice(0, 5));
       } else {
-        setError('都市が見つかりませんでした。対応都市: Tokyo, Osaka, Kyoto, New York, London');
-        setWeatherData(null);
-        setForecastData(null);
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        const cityData = findCityByName(cityName);
+        
+        if (cityData) {
+          setWeatherData(cityData);
+          setForecastData(FORECAST_DATA);
+          
+          const newHistory = searchHistory.filter(item => item !== cityData.name);
+          setSearchHistory([cityData.name, ...newHistory].slice(0, 5));
+        } else {
+          throw new Error('都市が見つかりませんでした。別の都市名や表記で試してみてください。');
+        }
       }
-      
+      setError('');
+    } catch (error) {
+      console.error('天気データ取得エラー:', error);
+      setError(error.message || '天気データの取得に失敗しました。');
+      setWeatherData(null);
+      setForecastData(null);
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   const searchWeather = () => {
@@ -255,15 +455,30 @@ const WeatherApp = () => {
     
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        () => {
-          setTimeout(() => {
-            setWeatherData(SAMPLE_WEATHER_DATA);
-            setForecastData(FORECAST_DATA);
-            setSearchCity('Tokyo');
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords;
+            
+            if (apiMode === 'live' && apiKey) {
+              const apiData = await fetchWeatherFromAPI(null, latitude, longitude);
+              setWeatherData(apiData.weather);
+              setForecastData(apiData.forecast);
+              setSearchCity(apiData.weather.name);
+            } else {
+              await new Promise(resolve => setTimeout(resolve, 800));
+              setWeatherData(SAMPLE_WEATHER_DATA);
+              setForecastData(FORECAST_DATA);
+              setSearchCity('Tokyo');
+            }
             setLoading(false);
-          }, 800);
+          } catch (error) {
+            console.error('位置情報での天気取得エラー:', error);
+            setError(error.message || '位置情報での天気取得に失敗しました。');
+            setLoading(false);
+          }
         },
-        () => {
+        (error) => {
+          console.error('位置情報取得エラー:', error);
           setError('位置情報の取得に失敗しました。');
           setLoading(false);
         }
@@ -272,20 +487,6 @@ const WeatherApp = () => {
       setError('位置情報がサポートされていません。');
       setLoading(false);
     }
-  };
-
-  const addEvent = () => {
-    if (!selectedDate || !newEvent.time || !newEvent.title) return;
-    
-    const dateKey = formatDateKey(selectedDate);
-    const updatedEvents = { ...events };
-    if (!updatedEvents[dateKey]) {
-      updatedEvents[dateKey] = [];
-    }
-    updatedEvents[dateKey].push({ ...newEvent });
-    setEvents(updatedEvents);
-    
-    setNewEvent({ time: '', title: '', type: 'personal' });
   };
 
   // Effects
@@ -309,16 +510,73 @@ const WeatherApp = () => {
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">天気予報アプリ</h1>
           <p className="text-blue-100">世界各地の天気情報をお届け</p>
+          <p className="text-blue-200 text-sm mt-1">🗾 日本全国対応 + OpenWeatherMap API連携</p>
           
-          <div className="mt-4 bg-white bg-opacity-20 rounded-xl p-4 inline-block">
-            <div className="flex items-center justify-center gap-3 text-white">
-              <span className="text-2xl">📅</span>
-              <div>
-                <p className="text-lg font-semibold">{formatDate(currentDateTime)}</p>
-                <p className="text-sm text-blue-100">{formatTime(currentDateTime)}</p>
+          {/* API Mode Toggle */}
+          <div className="mt-4 flex items-center justify-center gap-4">
+            <div className="bg-white bg-opacity-20 rounded-xl p-4 inline-block">
+              <div className="flex items-center justify-center gap-3 text-white">
+                <span className="text-2xl">📅</span>
+                <div>
+                  <p className="text-lg font-semibold">{formatDate(currentDateTime)}</p>
+                  <p className="text-sm text-blue-100">{formatTime(currentDateTime)}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white bg-opacity-20 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className={`w-3 h-3 rounded-full ${apiMode === 'live' ? 'bg-green-400' : 'bg-yellow-400'}`}></span>
+                  <span className="text-white text-sm">
+                    {apiMode === 'live' ? 'リアルタイム' : 'デモモード'}
+                  </span>
+                </div>
+                <button
+                  onClick={toggleApiMode}
+                  className="px-3 py-1 bg-white bg-opacity-30 hover:bg-white hover:bg-opacity-40 rounded-lg text-white text-sm transition-colors"
+                  type="button"
+                >
+                  {apiMode === 'live' ? 'デモに切替' : 'API有効化'}
+                </button>
               </div>
             </div>
           </div>
+
+          {/* API Key Input */}
+          {showApiKeyInput && (
+            <div className="mt-4 bg-white bg-opacity-20 rounded-xl p-4 max-w-md mx-auto">
+              <p className="text-white text-sm mb-3">OpenWeatherMap APIキーを入力してください</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="APIキーを入力..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-white bg-opacity-30 border border-white border-opacity-40 rounded text-white placeholder-white placeholder-opacity-70 text-sm"
+                />
+                <button
+                  onClick={handleApiKeySubmit}
+                  className="px-4 py-2 bg-green-500 bg-opacity-60 hover:bg-green-500 hover:bg-opacity-80 rounded text-white text-sm transition-colors"
+                  type="button"
+                >
+                  設定
+                </button>
+                <button
+                  onClick={() => setShowApiKeyInput(false)}
+                  className="px-4 py-2 bg-gray-500 bg-opacity-60 hover:bg-gray-500 hover:bg-opacity-80 rounded text-white text-sm transition-colors"
+                  type="button"
+                >
+                  キャンセル
+                </button>
+              </div>
+              <p className="text-blue-200 text-xs mt-2">
+                💡 <a href="https://openweathermap.org/api" target="_blank" rel="noopener noreferrer" className="underline">
+                  OpenWeatherMap
+                </a> で無料APIキーを取得できます
+              </p>
+            </div>
+          )}
         </header>
 
         {/* Search Section */}
@@ -328,7 +586,7 @@ const WeatherApp = () => {
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white text-opacity-70 text-xl">🔍</span>
               <input
                 type="text"
-                placeholder="都市名を入力してください（例: Tokyo, Osaka, London）"
+                placeholder="都市名を入力（例: 東京、札幌、福岡）"
                 className="w-full pl-12 pr-4 py-3 bg-white bg-opacity-20 border border-white border-opacity-30 rounded-xl text-white placeholder-white placeholder-opacity-70 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                 value={searchCity}
                 onChange={handleSearchChange}
@@ -338,7 +596,7 @@ const WeatherApp = () => {
               />
               
               {showSuggestions && searchSuggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white bg-opacity-95 rounded-xl shadow-lg z-10">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white bg-opacity-95 rounded-xl shadow-lg z-10 max-h-80 overflow-y-auto">
                   {searchSuggestions.map((city, index) => (
                     <div
                       key={index}
@@ -346,8 +604,30 @@ const WeatherApp = () => {
                       className="px-4 py-3 hover:bg-blue-500 hover:bg-opacity-20 cursor-pointer border-b border-gray-200 last:border-b-0"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-800">{city.name}, {city.country}</span>
-                        <span className="text-sm text-gray-600">{Math.round(city.main.temp)}°C</span>
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-800">{city.name}</span>
+                              {city.region && (
+                                <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                                  {city.region}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                                {getMatchTypeDescription(city.matchType)}
+                              </span>
+                              <span className="text-xs text-gray-600">
+                                類似度: {Math.round(city.score * 100)}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm text-gray-600">{Math.round(city.main.temp)}°C</span>
+                          <div className="text-lg">{getWeatherIcon(city.weather[0].icon)}</div>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -403,19 +683,22 @@ const WeatherApp = () => {
           <div className="mt-4">
             <p className="text-white text-opacity-70 text-sm mb-2">人気の都市:</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {['Tokyo', 'Osaka', 'New York', 'London', 'Kyoto'].map((city) => (
-                <button
-                  key={city}
-                  onClick={() => handleSuggestionClick(city)}
-                  className="px-3 py-2 bg-white bg-opacity-20 hover:bg-white hover:bg-opacity-30 rounded-lg text-white text-sm transition-colors flex items-center justify-between"
-                  type="button"
-                >
-                  <span>{city}</span>
-                  <span className="text-xs opacity-70">
-                    {CITIES_DATA[city.toLowerCase()] ? Math.round(CITIES_DATA[city.toLowerCase()].main.temp) + '°' : ''}
-                  </span>
-                </button>
-              ))}
+              {['Tokyo', 'Osaka', 'Kyoto', 'Sapporo', 'Fukuoka'].map((city) => {
+                const cityData = findCityByName(city);
+                return (
+                  <button
+                    key={city}
+                    onClick={() => handleSuggestionClick(city)}
+                    className="px-3 py-2 bg-white bg-opacity-20 hover:bg-white hover:bg-opacity-30 rounded-lg text-white text-sm transition-colors flex items-center justify-between"
+                    type="button"
+                  >
+                    <span>{city}</span>
+                    <span className="text-xs opacity-70">
+                      {cityData ? Math.round(cityData.main.temp) + '°' : ''}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -438,7 +721,7 @@ const WeatherApp = () => {
                 </span>
                 <button 
                   onClick={() => handleMonthChange(1)}
-                  className="p-2 bg-white bg-opacity-30 hover:bg-white hover:bg-opacity-40 rounded-lg text-white transition-colors text-xl"
+                  className="p-2 bg-white bg-opacity-30 hover:bg-white hover:bg-opacity-40 rounded-xl text-white transition-colors text-xl"
                   type="button"
                 >
                   ▶
@@ -575,7 +858,20 @@ const WeatherApp = () => {
         {/* Error Message */}
         {error && (
           <div className="bg-red-500 bg-opacity-30 border border-red-300 border-opacity-50 rounded-2xl p-4 mb-6 text-white text-center">
-            {error}
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <span className="text-xl">⚠️</span>
+              <span className="font-semibold">エラー</span>
+            </div>
+            <p>{error}</p>
+            {apiMode === 'live' && error.includes('APIキー') && (
+              <button
+                onClick={() => setShowApiKeyInput(true)}
+                className="mt-2 px-4 py-2 bg-white bg-opacity-30 hover:bg-white hover:bg-opacity-40 rounded-lg text-white text-sm transition-colors"
+                type="button"
+              >
+                APIキーを設定
+              </button>
+            )}
           </div>
         )}
 
@@ -583,7 +879,12 @@ const WeatherApp = () => {
         {loading && (
           <div className="bg-white bg-opacity-20 rounded-2xl p-8 mb-6 text-center">
             <div className="animate-spin w-8 h-8 border-4 border-white border-opacity-30 border-t-white rounded-full mx-auto mb-4"></div>
-            <p className="text-white">天気データを取得中...</p>
+            <p className="text-white">
+              {apiMode === 'live' ? 'リアルタイム天気データを取得中...' : '天気データを取得中...'}
+            </p>
+            <p className="text-blue-200 text-sm mt-1">
+              {apiMode === 'live' ? 'OpenWeatherMap APIから最新データを取得しています' : 'デモデータを読み込んでいます'}
+            </p>
           </div>
         )}
 
@@ -592,11 +893,24 @@ const WeatherApp = () => {
           <section className="bg-white bg-opacity-20 rounded-2xl p-6 mb-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                  <span className="text-xl">📍</span>
-                  {weatherData.name}, {weatherData.sys.country}
-                </h2>
+                <div className="flex items-center gap-3 mb-2">
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                    <span className="text-xl">📍</span>
+                    {weatherData.name}
+                    {weatherData.sys?.country && `, ${weatherData.sys.country}`}
+                  </h2>
+                  {apiMode === 'live' && (
+                    <span className="px-2 py-1 bg-green-500 bg-opacity-60 rounded text-white text-xs">
+                      LIVE
+                    </span>
+                  )}
+                </div>
                 <p className="text-blue-100">{weatherData.weather[0].description}</p>
+                {apiMode === 'live' && weatherData.dt && (
+                  <p className="text-blue-200 text-sm mt-1">
+                    最終更新: {new Date(weatherData.dt * 1000).toLocaleString('ja-JP')}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <div className="text-6xl mb-2">{getWeatherIcon(weatherData.weather[0].icon)}</div>
@@ -618,7 +932,7 @@ const WeatherApp = () => {
               <div className="bg-white bg-opacity-20 rounded-xl p-4 text-center">
                 <span className="text-3xl">💨</span>
                 <p className="text-white text-opacity-80 text-sm">風速</p>
-                <p className="text-white font-bold text-lg">{weatherData.wind.speed} m/s</p>
+                <p className="text-white font-bold text-lg">{weatherData.wind?.speed || 0} m/s</p>
               </div>
               <div className="bg-white bg-opacity-20 rounded-xl p-4 text-center">
                 <span className="text-3xl">⏲️</span>
@@ -629,10 +943,19 @@ const WeatherApp = () => {
           </section>
         )}
 
-        {/* 4-hour Forecast */}
+        {/* Forecast */}
         {forecastData && !loading && (
           <section className="bg-white bg-opacity-20 rounded-2xl p-6 mb-6">
-            <h3 className="text-xl font-bold text-white mb-4">4時間予報</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-white">
+                {apiMode === 'live' ? '今後の天気予報' : '4時間予報'}
+              </h3>
+              {apiMode === 'live' && (
+                <span className="px-2 py-1 bg-green-500 bg-opacity-60 rounded text-white text-xs">
+                  LIVE DATA
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {forecastData.list.slice(0, 4).map((item, index) => {
                 const forecastDate = new Date(item.dt * 1000);
@@ -659,7 +982,9 @@ const WeatherApp = () => {
                     </p>
                     <div className="text-3xl mb-2">{getWeatherIcon(item.weather[0].icon)}</div>
                     <p className="text-white font-bold">{Math.round(item.main.temp)}°C</p>
-                    <p className="text-white text-opacity-70 text-sm">{item.weather[0].main}</p>
+                    <p className="text-white text-opacity-70 text-sm">
+                      {item.weather[0].description || item.weather[0].main}
+                    </p>
                   </div>
                 );
               })}
@@ -667,11 +992,48 @@ const WeatherApp = () => {
           </section>
         )}
 
+        {/* API Information */}
+        <section className="bg-white bg-opacity-15 rounded-2xl p-4 mb-6 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span className="text-lg">🌐</span>
+            <h3 className="text-white font-semibold">API連携機能</h3>
+          </div>
+          <p className="text-blue-200 text-sm mb-3">
+            {apiMode === 'live' 
+              ? 'OpenWeatherMap APIからリアルタイムデータを取得中' 
+              : 'デモモードで動作中（サンプルデータを使用）'
+            }
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-blue-200">
+            <div className="bg-white bg-opacity-10 rounded-lg p-3">
+              <h4 className="font-semibold mb-2 text-white">🎭 デモモード</h4>
+              <ul className="text-left space-y-1">
+                <li>• 日本の主要都市のサンプルデータ</li>
+                <li>• あいまい検索機能</li>
+                <li>• 多言語対応（日本語/英語）</li>
+                <li>• 即座にレスポンス</li>
+              </ul>
+            </div>
+            <div className="bg-white bg-opacity-10 rounded-lg p-3">
+              <h4 className="font-semibold mb-2 text-white">🌍 リアルタイムモード</h4>
+              <ul className="text-left space-y-1">
+                <li>• 世界中の最新天気データ</li>
+                <li>• 5日間詳細予報</li>
+                <li>• 降水確率・視界・風向など</li>
+                <li>• GPS位置情報対応</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
         {/* Footer */}
         <footer className="text-center mt-8 text-white text-opacity-70">
-          <p>Built with React & Weather API</p>
+          <p>Built with React & OpenWeatherMap API</p>
           <p className="text-sm mt-2">
-            対応都市: Tokyo, Osaka, Kyoto, New York, London
+            🗾 日本全国対応 + 世界中の都市検索
+          </p>
+          <p className="text-xs mt-1 text-blue-200">
+            💡 デモモード: サンプルデータ | リアルタイムモード: OpenWeatherMap API
           </p>
         </footer>
       </div>
