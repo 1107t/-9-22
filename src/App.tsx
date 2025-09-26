@@ -1,28 +1,104 @@
 import React, { useState, useEffect } from 'react';
 
+// Type definitions
+interface WeatherCondition {
+  main: string;
+  description: string;
+  icon: string;
+}
+
+interface WeatherMain {
+  temp: number;
+  feels_like: number;
+  humidity: number;
+  pressure: number;
+}
+
+interface WeatherWind {
+  speed: number;
+}
+
+interface WeatherSys {
+  country: string;
+}
+
+interface WeatherData {
+  name: string;
+  main: WeatherMain;
+  weather: WeatherCondition[];
+  wind: WeatherWind;
+  sys: WeatherSys;
+  dt?: number;
+}
+
+interface ForecastItem {
+  dt: number;
+  main: {
+    temp: number;
+  };
+  weather: WeatherCondition[];
+}
+
+interface ForecastData {
+  list: ForecastItem[];
+}
+
+interface CityData extends WeatherData {
+  country: string;
+  region: string;
+  aliases: string[];
+  score?: number;
+  matchType?: string;
+}
+
+interface Event {
+  time: string;
+  title: string;
+  type: string;
+}
+
+interface EventType {
+  label: string;
+  color: string;
+  bgOpacity: string;
+  icon: string;
+}
+
+interface Events {
+  [key: string]: Event[];
+}
+
+interface EventTypes {
+  personal: EventType;
+  work: EventType;
+  company: EventType;
+  social: EventType;
+  workout: EventType;
+}
+
 const WeatherApp = () => {
   // State management
-  const [weatherData, setWeatherData] = useState(null);
-  const [forecastData, setForecastData] = useState(null);
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [forecastData, setForecastData] = useState<ForecastData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchCity, setSearchCity] = useState('');
-  const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [searchSuggestions, setSearchSuggestions] = useState<CityData[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchHistory, setSearchHistory] = useState(['Tokyo', 'Osaka']);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [apiMode, setApiMode] = useState('demo');
   const [apiKey, setApiKey] = useState('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
-  const [newEvent, setNewEvent] = useState({ 
+  const [newEvent, setNewEvent] = useState<Event>({ 
     time: '', 
     title: '', 
     type: 'personal' 
   });
-  const [events, setEvents] = useState({
+  const [events, setEvents] = useState<Events>({
     '2025-09-22': [
       { time: '10:00', title: '会議', type: 'work' },
       { time: '18:00', title: 'ジム', type: 'workout' }
@@ -38,7 +114,7 @@ const WeatherApp = () => {
   });
 
   // Constants
-  const EVENT_TYPES = {
+  const EVENT_TYPES: EventTypes = {
     personal: { label: '個人', color: 'bg-blue-500', bgOpacity: 'bg-opacity-50', icon: '👤' },
     work: { label: '仕事', color: 'bg-red-500', bgOpacity: 'bg-opacity-50', icon: '💼' },
     company: { label: '会社', color: 'bg-orange-500', bgOpacity: 'bg-opacity-50', icon: '🏢' },
@@ -46,7 +122,7 @@ const WeatherApp = () => {
     workout: { label: '運動', color: 'bg-purple-500', bgOpacity: 'bg-opacity-50', icon: '💪' }
   };
 
-  const SAMPLE_WEATHER_DATA = {
+  const SAMPLE_WEATHER_DATA: WeatherData = {
     name: "Tokyo",
     main: {
       temp: 22,
@@ -67,7 +143,7 @@ const WeatherApp = () => {
     }
   };
 
-  const CITIES_DATA = {
+  const CITIES_DATA: { [key: string]: CityData } = {
     // 北海道
     'sapporo': {
       ...SAMPLE_WEATHER_DATA, name: 'Sapporo', country: 'Japan', region: '北海道',
@@ -169,19 +245,19 @@ const WeatherApp = () => {
     'ehime': { ...SAMPLE_WEATHER_DATA, name: 'Ehime', country: 'Japan', region: '四国', aliases: ['愛媛', 'えひめ', 'ehime'], main: { ...SAMPLE_WEATHER_DATA.main, temp: 23 } }
   };
 
-  const FORECAST_DATA = {
+  const FORECAST_DATA: ForecastData = {
     list: [
-      { dt: Date.now() / 1000 + 3600, main: { temp: 24 }, weather: [{ main: "晴れ", icon: "01d" }] },
-      { dt: Date.now() / 1000 + 7200, main: { temp: 26 }, weather: [{ main: "曇り", icon: "02d" }] },
-      { dt: Date.now() / 1000 + 10800, main: { temp: 23 }, weather: [{ main: "雨", icon: "09d" }] },
-      { dt: Date.now() / 1000 + 14400, main: { temp: 20 }, weather: [{ main: "晴れ", icon: "01n" }] }
+      { dt: Date.now() / 1000 + 3600, main: { temp: 24 }, weather: [{ main: "晴れ", description: "晴れ", icon: "01d" }] },
+      { dt: Date.now() / 1000 + 7200, main: { temp: 26 }, weather: [{ main: "曇り", description: "曇り", icon: "02d" }] },
+      { dt: Date.now() / 1000 + 10800, main: { temp: 23 }, weather: [{ main: "雨", description: "雨", icon: "09d" }] },
+      { dt: Date.now() / 1000 + 14400, main: { temp: 20 }, weather: [{ main: "晴れ", description: "晴れ", icon: "01n" }] }
     ]
   };
 
   const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
   // Utility functions
-  const formatDate = (date) => {
+  const formatDate = (date: Date): string => {
     return date.toLocaleDateString('ja-JP', {
       year: 'numeric',
       month: 'long',
@@ -190,26 +266,26 @@ const WeatherApp = () => {
     });
   };
 
-  const formatTime = (date) => {
+  const formatTime = (date: Date): string => {
     return date.toLocaleTimeString('ja-JP', {
       hour: '2-digit',
       minute: '2-digit'
     });
   };
 
-  const formatDateKey = (date) => {
+  const formatDateKey = (date: Date): string => {
     return date.toISOString().split('T')[0];
   };
 
-  const getDaysInMonth = (date) => {
+  const getDaysInMonth = (date: Date): number => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   };
 
-  const getFirstDayOfMonth = (date) => {
+  const getFirstDayOfMonth = (date: Date): number => {
     return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
   };
 
-  const getWeatherForDate = (date) => {
+  const getWeatherForDate = (date: Date) => {
     const weathers = ['☀️', '⛅', '🌧️', '☁️', '🌤️'];
     const temps = [18, 22, 25, 28, 20, 15, 30];
     const hash = date.getDate() + date.getMonth();
@@ -219,8 +295,8 @@ const WeatherApp = () => {
     };
   };
 
-  const getWeatherIcon = (iconCode) => {
-    const icons = {
+  const getWeatherIcon = (iconCode: string): string => {
+    const icons: { [key: string]: string } = {
       '01d': '☀️', '01n': '🌙', '02d': '⛅', '02n': '☁️',
       '03d': '☁️', '03n': '☁️', '04d': '☁️', '04n': '☁️',
       '09d': '🌧️', '09n': '🌧️', '10d': '🌦️', '10n': '🌧️',
@@ -230,8 +306,8 @@ const WeatherApp = () => {
     return icons[iconCode] || '🌤️';
   };
 
-  const calculateLevenshteinDistance = (a, b) => {
-    const matrix = [];
+  const calculateLevenshteinDistance = (a: string, b: string): number => {
+    const matrix: number[][] = [];
     for (let i = 0; i <= b.length; i++) {
       matrix[i] = [i];
     }
@@ -254,17 +330,17 @@ const WeatherApp = () => {
     return matrix[b.length][a.length];
   };
 
-  const calculateSimilarity = (input, target) => {
+  const calculateSimilarity = (input: string, target: string): number => {
     const distance = calculateLevenshteinDistance(input.toLowerCase(), target.toLowerCase());
     const maxLength = Math.max(input.length, target.length);
     return maxLength === 0 ? 1 : 1 - (distance / maxLength);
   };
 
-  const fuzzySearch = (query, threshold = 0.3) => {
+  const fuzzySearch = (query: string, threshold = 0.3): CityData[] => {
     if (!query.trim()) return [];
     
     const queryLower = query.toLowerCase();
-    const results = [];
+    const results: CityData[] = [];
 
     Object.entries(CITIES_DATA).forEach(([key, city]) => {
       let bestScore = 0;
@@ -302,10 +378,10 @@ const WeatherApp = () => {
       }
     });
 
-    return results.sort((a, b) => b.score - a.score).slice(0, 8);
+    return results.sort((a, b) => b.score! - a.score!).slice(0, 8);
   };
 
-  const getMatchTypeDescription = (matchType) => {
+  const getMatchTypeDescription = (matchType: string): string => {
     switch (matchType) {
       case 'exact':
       case 'exact_alias':
@@ -322,7 +398,7 @@ const WeatherApp = () => {
   };
 
   // API related functions
-  const fetchWeatherFromAPI = async (cityName, lat = null, lon = null) => {
+  const fetchWeatherFromAPI = async (cityName: string | null, lat: number | null = null, lon: number | null = null) => {
     if (!apiKey.trim()) {
       throw new Error('APIキーが設定されていません');
     }
@@ -334,8 +410,8 @@ const WeatherApp = () => {
       weatherUrl = `${baseUrl}/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=ja`;
       forecastUrl = `${baseUrl}/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=ja`;
     } else {
-      weatherUrl = `${baseUrl}/weather?q=${encodeURIComponent(cityName)}&appid=${apiKey}&units=metric&lang=ja`;
-      forecastUrl = `${baseUrl}/forecast?q=${encodeURIComponent(cityName)}&appid=${apiKey}&units=metric&lang=ja`;
+      weatherUrl = `${baseUrl}/weather?q=${encodeURIComponent(cityName!)}&appid=${apiKey}&units=metric&lang=ja`;
+      forecastUrl = `${baseUrl}/forecast?q=${encodeURIComponent(cityName!)}&appid=${apiKey}&units=metric&lang=ja`;
     }
 
     try {
@@ -390,7 +466,7 @@ const WeatherApp = () => {
   };
 
   // Event handlers
-  const handleSearchChange = (e) => {
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchCity(value);
     
@@ -404,20 +480,20 @@ const WeatherApp = () => {
     }
   };
 
-  const handleSuggestionClick = (cityName) => {
+  const handleSuggestionClick = (cityName: string) => {
     setSearchCity(cityName);
     setShowSuggestions(false);
     searchWeatherByName(cityName);
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       setShowSuggestions(false);
       searchWeather();
     }
   };
 
-  const handleDateSelect = (date) => {
+  const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
   };
 
@@ -425,13 +501,13 @@ const WeatherApp = () => {
     setShowCalendar(!showCalendar);
   };
 
-  const handleMonthChange = (direction) => {
+  const handleMonthChange = (direction: number) => {
     const newDate = new Date(calendarDate);
     newDate.setMonth(calendarDate.getMonth() + direction);
     setCalendarDate(newDate);
   };
 
-  const handleEventChange = (field, value) => {
+  const handleEventChange = (field: keyof Event, value: string) => {
     setNewEvent(prev => ({
       ...prev,
       [field]: value
@@ -453,12 +529,12 @@ const WeatherApp = () => {
   };
 
   // Main functions
-  const findCityByName = (cityName) => {
+  const findCityByName = (cityName: string): CityData | null => {
     const results = fuzzySearch(cityName, 0.3);
     return results.length > 0 ? results[0] : null;
   };
 
-  const searchWeatherByName = async (cityName) => {
+  const searchWeatherByName = async (cityName: string) => {
     setLoading(true);
     setError('');
     
@@ -488,7 +564,7 @@ const WeatherApp = () => {
       setError('');
     } catch (error) {
       console.error('天気データ取得エラー:', error);
-      setError(error.message || '天気データの取得に失敗しました。');
+      setError((error as Error).message || '天気データの取得に失敗しました。');
       setWeatherData(null);
       setForecastData(null);
     } finally {
@@ -528,7 +604,7 @@ const WeatherApp = () => {
             setLoading(false);
           } catch (error) {
             console.error('位置情報での天気取得エラー:', error);
-            setError(error.message || '位置情報での天気取得に失敗しました。');
+            setError((error as Error).message || '位置情報での天気取得に失敗しました。');
             setLoading(false);
           }
         },
@@ -671,10 +747,10 @@ const WeatherApp = () => {
                             </div>
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                                {getMatchTypeDescription(city.matchType)}
+                                {getMatchTypeDescription(city.matchType || '')}
                               </span>
                               <span className="text-xs text-gray-600">
-                                類似度: {Math.round(city.score * 100)}%
+                                類似度: {Math.round((city.score || 0) * 100)}%
                               </span>
                             </div>
                           </div>
@@ -823,9 +899,9 @@ const WeatherApp = () => {
                         {dayEvents.slice(0, 2).map((event, idx) => (
                           <div 
                             key={idx} 
-                            className={`text-xs p-1 rounded mb-1 truncate flex items-center gap-1 ${EVENT_TYPES[event.type]?.color || 'bg-gray-500'} ${EVENT_TYPES[event.type]?.bgOpacity || 'bg-opacity-50'}`}
+                            className={`text-xs p-1 rounded mb-1 truncate flex items-center gap-1 ${EVENT_TYPES[event.type as keyof EventTypes]?.color || 'bg-gray-500'} ${EVENT_TYPES[event.type as keyof EventTypes]?.bgOpacity || 'bg-opacity-50'}`}
                           >
-                            <span>{EVENT_TYPES[event.type]?.icon || '📝'}</span>
+                            <span>{EVENT_TYPES[event.type as keyof EventTypes]?.icon || '📝'}</span>
                             <span className="text-white">{event.time} {event.title}</span>
                           </div>
                         ))}
@@ -856,11 +932,11 @@ const WeatherApp = () => {
                     <div key={idx} className="flex items-center gap-3 mb-2 text-white">
                       <span className="text-sm bg-white bg-opacity-30 px-2 py-1 rounded">{event.time}</span>
                       <div className="flex items-center gap-2 flex-1">
-                        <span>{EVENT_TYPES[event.type]?.icon || '📝'}</span>
+                        <span>{EVENT_TYPES[event.type as keyof EventTypes]?.icon || '📝'}</span>
                         <span>{event.title}</span>
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded text-white ${EVENT_TYPES[event.type]?.color || 'bg-gray-500'} ${EVENT_TYPES[event.type]?.bgOpacity || 'bg-opacity-50'}`}>
-                        {EVENT_TYPES[event.type]?.label || '不明'}
+                      <span className={`text-xs px-2 py-1 rounded text-white ${EVENT_TYPES[event.type as keyof EventTypes]?.color || 'bg-gray-500'} ${EVENT_TYPES[event.type as keyof EventTypes]?.bgOpacity || 'bg-opacity-50'}`}>
+                        {EVENT_TYPES[event.type as keyof EventTypes]?.label || '不明'}
                       </span>
                     </div>
                   ))}
@@ -1012,7 +1088,7 @@ const WeatherApp = () => {
               )}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {forecastData.list.slice(0, 4).map((item, index) => {
+              {forecastData.list.slice(0, 4).map((item: ForecastItem, index: number) => {
                 const forecastDate = new Date(item.dt * 1000);
                 const isToday = forecastDate.toDateString() === currentDateTime.toDateString();
                 const isTomorrow = forecastDate.toDateString() === new Date(currentDateTime.getTime() + 24 * 60 * 60 * 1000).toDateString();
