@@ -1,15 +1,14 @@
-// App.tsx
+// WeatherApp.tsx
 import React, { useState, useEffect } from 'react';
 import type { WeatherData, ForecastData, CityData, Event, Events, ApiMode } from './types';
 import { SAMPLE_WEATHER_DATA, FORECAST_DATA } from './constants';
 import { fuzzySearch, findCityByName, formatDateKey } from './utils';
-import { fetchWeatherFromAPI } from './apiService';
 import Header from './Header';
-import ApiKeyInput from './ApiKeyInput.tsx';
-import SearchSection from './SearchSection.tsx';
-import WeatherDisplay from './WeatherDisplay.tsx';
-import WeatherForecast from './WeatherForecast.tsx';
-import Calendar from './Calendar.tsx';
+import ApiKeyInput from './ApiKeyInput';
+import SearchSection from './SearchSection';
+import WeatherDisplay from './WeatherDisplay';
+import WeatherForecast from './WeatherForecast';
+import Calendar from './Calendar';
 
 const WeatherApp = () => {
   // State management
@@ -80,27 +79,18 @@ const WeatherApp = () => {
     setError('');
     
     try {
-      if (apiMode === 'live' && apiKey) {
-        const apiData = await fetchWeatherFromAPI(apiKey, cityName);
-        setWeatherData(apiData.weather);
-        setForecastData(apiData.forecast);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const cityData = findCityByName(cityName);
+      
+      if (cityData) {
+        setWeatherData(cityData);
+        setForecastData(FORECAST_DATA);
         
-        const newHistory = searchHistory.filter(item => item !== apiData.weather.name);
-        setSearchHistory([apiData.weather.name, ...newHistory].slice(0, 5));
+        const newHistory = searchHistory.filter(item => item !== cityData.name);
+        setSearchHistory([cityData.name, ...newHistory].slice(0, 5));
       } else {
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        const cityData = findCityByName(cityName);
-        
-        if (cityData) {
-          setWeatherData(cityData);
-          setForecastData(FORECAST_DATA);
-          
-          const newHistory = searchHistory.filter(item => item !== cityData.name);
-          setSearchHistory([cityData.name, ...newHistory].slice(0, 5));
-        } else {
-          throw new Error('都市が見つかりませんでした。別の都市名や表記で試してみてください。');
-        }
+        throw new Error('都市が見つかりませんでした。別の都市名や表記で試してみてください。');
       }
       setError('');
     } catch (error) {
@@ -125,40 +115,12 @@ const WeatherApp = () => {
     setLoading(true);
     setError('');
     
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
-            
-            if (apiMode === 'live' && apiKey) {
-              const apiData = await fetchWeatherFromAPI(apiKey, null, latitude, longitude);
-              setWeatherData(apiData.weather);
-              setForecastData(apiData.forecast);
-              setSearchCity(apiData.weather.name);
-            } else {
-              await new Promise(resolve => setTimeout(resolve, 800));
-              setWeatherData(SAMPLE_WEATHER_DATA);
-              setForecastData(FORECAST_DATA);
-              setSearchCity('Tokyo');
-            }
-            setLoading(false);
-          } catch (error) {
-            console.error('位置情報での天気取得エラー:', error);
-            setError((error as Error).message || '位置情報での天気取得に失敗しました。');
-            setLoading(false);
-          }
-        },
-        (error) => {
-          console.error('位置情報取得エラー:', error);
-          setError('位置情報の取得に失敗しました。');
-          setLoading(false);
-        }
-      );
-    } else {
-      setError('位置情報がサポートされていません。');
+    setTimeout(() => {
+      setWeatherData(SAMPLE_WEATHER_DATA);
+      setForecastData(FORECAST_DATA);
+      setSearchCity('Tokyo');
       setLoading(false);
-    }
+    }, 800);
   };
 
   const toggleApiMode = () => {
@@ -323,8 +285,4 @@ const WeatherApp = () => {
   );
 };
 
-function App() {
-  return <WeatherApp />;
-}
-
-export default App;
+export default WeatherApp;
