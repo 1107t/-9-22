@@ -5,11 +5,11 @@ import { SAMPLE_WEATHER_DATA, FORECAST_DATA } from './constants';
 import { fuzzySearch, findCityByName, formatDateKey } from './utils';
 import { fetchWeatherFromAPI } from './apiService';
 import Header from './Header';
-import ApiKeyInput from './ApiKeyInput.tsx';
-import SearchSection from './SearchSection.tsx';
-import WeatherDisplay from './WeatherDisplay.tsx';
-import WeatherForecast from './WeatherForecast.tsx';
-import Calendar from './Calendar.tsx';
+import ApiKeyInput from './ApiKeyInput';
+import SearchSection from './SearchSection';
+import WeatherDisplay from './WeatherDisplay';
+import WeatherForecast from './WeatherForecast';
+import Calendar from './Calendar';
 
 const WeatherApp = () => {
   // State management
